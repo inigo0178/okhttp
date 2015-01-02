@@ -17,6 +17,7 @@
 
 package com.squareup.okhttp.mockwebserver;
 
+import com.squareup.okhttp.Headers;
 import com.squareup.okhttp.Protocol;
 import com.squareup.okhttp.internal.NamedRunnable;
 import com.squareup.okhttp.internal.Platform;
@@ -497,7 +498,7 @@ public final class MockWebServer {
       return null; // no request because the stream is exhausted
     }
 
-    List<String> headers = new ArrayList<>();
+    Headers.Builder headers = new Headers.Builder();
     long contentLength = -1;
     boolean chunked = false;
     boolean expectContinue = false;
@@ -561,7 +562,7 @@ public final class MockWebServer {
       throw new UnsupportedOperationException("Unexpected method: " + request);
     }
 
-    return new RecordedRequest(request, headers, chunkSizes, requestBody.numBytesReceived,
+    return new RecordedRequest(request, headers.build(), chunkSizes, requestBody.numBytesReceived,
         new Buffer().write(requestBody.toByteArray()), sequenceNumber, socket);
   }
 
@@ -710,7 +711,7 @@ public final class MockWebServer {
 
     private RecordedRequest readRequest(SpdyStream stream) throws IOException {
       List<Header> spdyHeaders = stream.getRequestHeaders();
-      List<String> httpHeaders = new ArrayList<>();
+      Headers.Builder httpHeaders = new Headers.Builder();
       String method = "<:method omitted>";
       String path = "<:path omitted>";
       String version = protocol == Protocol.SPDY_3 ? "<:version omitted>" : "HTTP/1.1";
@@ -734,7 +735,7 @@ public final class MockWebServer {
 
       String requestLine = method + ' ' + path + ' ' + version;
       List<Integer> chunkSizes = Collections.emptyList(); // No chunked encoding for SPDY.
-      return new RecordedRequest(requestLine, httpHeaders, chunkSizes, body.size(), body,
+      return new RecordedRequest(requestLine, httpHeaders.build(), chunkSizes, body.size(), body,
           sequenceNumber.getAndIncrement(), socket);
     }
 
@@ -805,13 +806,9 @@ public final class MockWebServer {
             : Header.TARGET_AUTHORITY, getUrl(pushPromise.getPath()).getHost()));
         pushedHeaders.add(new Header(Header.TARGET_METHOD, pushPromise.getMethod()));
         pushedHeaders.add(new Header(Header.TARGET_PATH, pushPromise.getPath()));
-        for (int i = 0, size = pushPromise.getHeaders().size(); i < size; i++) {
-          String header = pushPromise.getHeaders().get(i);
-          String[] headerParts = header.split(":", 2);
-          if (headerParts.length != 2) {
-            throw new AssertionError("Unexpected header: " + header);
-          }
-          pushedHeaders.add(new Header(headerParts[0], headerParts[1].trim()));
+        Headers pushPromiseHeaders = pushPromise.getHeaders();
+        for (int i = 0, size = pushPromiseHeaders.size(); i < size; i++) {
+          pushedHeaders.add(new Header(pushPromiseHeaders.name(i), pushPromiseHeaders.value(i)));
         }
         String requestLine = pushPromise.getMethod() + ' ' + pushPromise.getPath() + " HTTP/1.1";
         List<Integer> chunkSizes = Collections.emptyList(); // No chunked encoding for SPDY.
